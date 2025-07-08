@@ -48,7 +48,8 @@ class Piece:
 
 class Tetris:
     def __init__(self):
-        pyxel.init(WIDTH * BLOCK_SIZE, HEIGHT * BLOCK_SIZE, caption="Pyxel Tetris")
+        # 'caption' was renamed to 'title' in newer versions of Pyxel
+        pyxel.init(WIDTH * BLOCK_SIZE, HEIGHT * BLOCK_SIZE, title="Pyxel Tetris")
         self.board = [[0 for _ in range(WIDTH)] for _ in range(HEIGHT)]
         self.piece = Piece()
         self.tick = 0
