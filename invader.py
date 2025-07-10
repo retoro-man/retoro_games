@@ -2,7 +2,10 @@ import pyxel
 
 class App:
     def __init__(self):
-        pyxel.init(160, 120, caption="Pyxel Invader")
+        # In newer versions of Pyxel the caption argument was renamed to
+        # "title". Using the incorrect argument raises a TypeError, so use
+        # the modern "title" keyword instead for compatibility.
+        pyxel.init(160, 120, title="Pyxel Invader")
         self.player_x = pyxel.width // 2
         self.bullets = []
         self.enemy_dir = 1
