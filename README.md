@@ -18,3 +18,22 @@ Run the game with:
 ```bash
 python invader.py
 ```
+
+## Packaging for the Web
+
+Pyxel can export games as a static HTML page. Install Pyxel with its web
+dependencies and run the packaging command:
+
+```bash
+pip install "pyxel[full]"
+pyxel package invader.py
+```
+
+The command creates a `dist/` directory containing `index.html` and support
+files. Open `dist/index.html` locally or upload the directory to any static
+hosting service.
+
+### Hosting on GitHub Pages
+
+Create a branch such as `gh-pages`, copy the contents of `dist/` to it and
+push. Enable GitHub Pages in the repository settings to share the game online.
