@@ -1,5 +1,6 @@
 import random
 import pyxel
+from typing import List, Optional
 
 
 class Bullet:
@@ -20,7 +21,7 @@ class Player:
     def __init__(self) -> None:
         self.x = pyxel.width // 2
         self.lives = 3
-        self.bullet: Bullet | None = None
+        self.bullet: Optional[Bullet] = None
 
     def update(self) -> None:
         if pyxel.btn(pyxel.KEY_LEFT):
@@ -50,7 +51,7 @@ class Invader:
 
 class InvaderGroup:
     def __init__(self) -> None:
-        self.invaders: list[Invader] = []
+        self.invaders: List[Invader] = []
         self.dir = 1
         self.timer = 0
         for row, points in enumerate([30, 20, 10]):
@@ -126,9 +127,9 @@ class Game:
         pyxel.init(160, 120, title="Pyxel Invader")
         self.player = Player()
         self.invaders = InvaderGroup()
-        self.enemy_bullets: list[Bullet] = []
+        self.enemy_bullets: List[Bullet] = []
         self.barriers = [Barrier(30, 90), Barrier(70, 90), Barrier(110, 90)]
-        self.ufo: UFO | None = None
+        self.ufo: Optional[UFO] = None
         self.next_ufo = 300
         self.score = 0
         pyxel.run(self.update, self.draw)
