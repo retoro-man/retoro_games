@@ -1,5 +1,8 @@
 import pyxel
 
+# older versions of Pyxel used MOUSE_BUTTON_LEFT
+MOUSE_LEFT = getattr(pyxel, "MOUSE_LEFT", getattr(pyxel, "MOUSE_BUTTON_LEFT", 0))
+
 class VirtualController:
     """Simple on-screen controller for touch devices."""
 
@@ -27,7 +30,7 @@ class VirtualController:
     def update(self, off_x: int = 0, off_y: int = 0) -> None:
         self.reset()
         mx, my = pyxel.mouse_x, pyxel.mouse_y
-        pressed = pyxel.btn(pyxel.MOUSE_LEFT)
+        pressed = pyxel.btn(MOUSE_LEFT)
         orient = self.orientation()
 
         if orient == 'portrait':
