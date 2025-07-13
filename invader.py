@@ -1,5 +1,10 @@
 import random
 import pyxel
+from typing import List, Optional
+from controller import VirtualController
+
+GAME_W = 160
+GAME_H = 120
 
 
 class Bullet:
@@ -10,7 +15,7 @@ class Bullet:
 
     def update(self) -> bool:
         self.y += self.dy
-        return 0 <= self.y < pyxel.height
+        return 0 <= self.y < GAME_H
 
     def draw(self, color: int) -> None:
         pyxel.rect(self.x, self.y, 1, 4, color)
@@ -18,22 +23,22 @@ class Bullet:
 
 class Player:
     def __init__(self) -> None:
-        self.x = pyxel.width // 2
+        self.x = GAME_W // 2
         self.lives = 3
-        self.bullet: Bullet | None = None
+        self.bullet: Optional[Bullet] = None
 
-    def update(self) -> None:
-        if pyxel.btn(pyxel.KEY_LEFT):
+    def update(self, ctl: VirtualController) -> None:
+        if pyxel.btn(pyxel.KEY_LEFT) or ctl.left:
             self.x = max(self.x - 2, 0)
-        if pyxel.btn(pyxel.KEY_RIGHT):
-            self.x = min(self.x + 2, pyxel.width - 8)
-        if pyxel.btnp(pyxel.KEY_SPACE) and self.bullet is None:
-            self.bullet = Bullet(self.x + 4, pyxel.height - 10, -4)
+        if pyxel.btn(pyxel.KEY_RIGHT) or ctl.right:
+            self.x = min(self.x + 2, GAME_W - 8)
+        if (pyxel.btnp(pyxel.KEY_SPACE) or ctl.a_p) and self.bullet is None:
+            self.bullet = Bullet(self.x + 4, GAME_H - 10, -4)
         if self.bullet and not self.bullet.update():
             self.bullet = None
 
     def draw(self) -> None:
-        pyxel.rect(self.x, pyxel.height - 8, 8, 8, 9)
+        pyxel.rect(self.x, GAME_H - 8, 8, 8, 9)
         if self.bullet:
             self.bullet.draw(7)
 
@@ -50,7 +55,7 @@ class Invader:
 
 class InvaderGroup:
     def __init__(self) -> None:
-        self.invaders: list[Invader] = []
+        self.invaders: List[Invader] = []
         self.dir = 1
         self.timer = 0
         for row, points in enumerate([30, 20, 10]):
@@ -66,7 +71,7 @@ class InvaderGroup:
         edge = False
         for inv in self.invaders:
             inv.x += self.dir
-            if inv.x <= 4 or inv.x >= pyxel.width - 12:
+            if inv.x <= 4 or inv.x >= GAME_W - 12:
                 edge = True
         if edge:
             self.dir *= -1
@@ -109,13 +114,13 @@ class UFO:
             self.x = -16
             self.dir = 1
         else:
-            self.x = pyxel.width
+            self.x = GAME_W
             self.dir = -1
         self.y = 10
 
     def update(self) -> bool:
         self.x += self.dir
-        return -16 <= self.x <= pyxel.width
+        return -16 <= self.x <= GAME_W
 
     def draw(self) -> None:
         pyxel.rect(self.x, self.y, 16, 6, 8)
@@ -123,29 +128,46 @@ class UFO:
 
 class Game:
     def __init__(self) -> None:
-        pyxel.init(160, 120, title="Pyxel Invader")
+        pyxel.init(320, 240, title="Pyxel Invader")
+        self.off_x = 0
+        self.off_y = 0
+        self.controller = VirtualController(GAME_W, GAME_H)
         self.player = Player()
         self.invaders = InvaderGroup()
-        self.enemy_bullets: list[Bullet] = []
+        self.enemy_bullets: List[Bullet] = []
         self.barriers = [Barrier(30, 90), Barrier(70, 90), Barrier(110, 90)]
-        self.ufo: UFO | None = None
+        self.ufo: Optional[UFO] = None
         self.next_ufo = 300
         self.score = 0
         pyxel.run(self.update, self.draw)
 
+    def calculate_offset(self) -> None:
+        """Place the game area depending on window orientation."""
+        if pyxel.height > pyxel.width:
+            # portrait - game at top center
+            self.off_x = (pyxel.width - GAME_W) // 2
+            self.off_y = 0
+        else:
+            # landscape - center
+            self.off_x = (pyxel.width - GAME_W) // 2
+            self.off_y = (pyxel.height - GAME_H) // 2
+
     # ------------------- Game Logic -------------------
     def update(self) -> None:
+        self.calculate_offset()
+        self.controller.update(self.off_x, self.off_y)
+
         if not self.invaders.invaders or self.player.lives <= 0:
             if pyxel.btnp(pyxel.KEY_RETURN):
                 self.__init__()
             return
 
-        self.player.update()
+        self.player.update(self.controller)
         self.invaders.update()
         self.update_enemy_bullets()
         self.handle_collisions()
         self.update_ufo()
-        if self.invaders.bottom() >= pyxel.height - 16:
+        if self.invaders.bottom() >= GAME_H - 16:
             self.player.lives = 0
 
     def update_enemy_bullets(self) -> None:
@@ -177,7 +199,7 @@ class Game:
 
         # enemy bullet vs player or barriers
         for bullet in self.enemy_bullets[:]:
-            if self.player.x < bullet.x < self.player.x + 8 and pyxel.height - 8 < bullet.y < pyxel.height:
+            if self.player.x < bullet.x < self.player.x + 8 and GAME_H - 8 < bullet.y < GAME_H:
                 self.player.lives -= 1
                 self.enemy_bullets.remove(bullet)
                 continue
@@ -198,6 +220,7 @@ class Game:
     # ------------------- Drawing -------------------
     def draw(self) -> None:
         pyxel.cls(0)
+        pyxel.camera(self.off_x, self.off_y)
         self.player.draw()
         self.invaders.draw()
         for bullet in self.enemy_bullets:
@@ -207,11 +230,13 @@ class Game:
         if self.ufo:
             self.ufo.draw()
         pyxel.text(5, 5, f"Score: {self.score}", 7)
-        pyxel.text(pyxel.width - 45, 5, f"Lives: {self.player.lives}", 7)
+        pyxel.text(GAME_W - 45, 5, f"Lives: {self.player.lives}", 7)
         if self.player.lives <= 0 or not self.invaders.invaders:
             msg = "GAME OVER" if self.player.lives <= 0 else "YOU WIN"
-            pyxel.text(pyxel.width // 2 - 20, pyxel.height // 2, msg, 7)
-            pyxel.text(pyxel.width // 2 - 40, pyxel.height // 2 + 10, "PRESS ENTER TO RESTART", 7)
+            pyxel.text(GAME_W // 2 - 20, GAME_H // 2, msg, 7)
+            pyxel.text(GAME_W // 2 - 40, GAME_H // 2 + 10, "PRESS ENTER TO RESTART", 7)
+        pyxel.camera()
+        self.controller.draw(self.off_x, self.off_y)
 
 
 if __name__ == "__main__":
