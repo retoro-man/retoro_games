@@ -34,7 +34,9 @@ class Player:
             self.bullet = None
 
     def draw(self) -> None:
-        pyxel.rect(self.x, pyxel.height - 8, 8, 8, 9)
+        ship_y = pyxel.height - 8
+        pyxel.tri(self.x, ship_y + 7, self.x + 4, ship_y, self.x + 8, ship_y + 7, 9)
+        pyxel.rect(self.x + 2, ship_y + 4, 4, 3, 11)
         if self.bullet:
             self.bullet.draw(7)
 
@@ -46,7 +48,11 @@ class Invader:
         self.score = score
 
     def draw(self) -> None:
-        pyxel.rect(self.x, self.y, 8, 8, 11)
+        px = self.x
+        py = self.y
+        pyxel.rect(px + 1, py, 6, 2, 11)
+        pyxel.rect(px, py + 2, 8, 3, 11)
+        pyxel.rect(px + 1, py + 5, 6, 1, 11)
 
 
 class InvaderGroup:
@@ -119,7 +125,10 @@ class UFO:
         return -16 <= self.x <= pyxel.width
 
     def draw(self) -> None:
-        pyxel.rect(self.x, self.y, 16, 6, 8)
+        px = self.x
+        py = self.y
+        pyxel.circ(px + 8, py + 2, 3, 8)
+        pyxel.rect(px + 2, py + 2, 12, 2, 8)
 
 
 class Game:
