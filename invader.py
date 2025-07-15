@@ -1,6 +1,15 @@
 import random
 import pyxel
 from typing import List, Optional
+import base64
+import pathlib
+
+
+def ensure_assets() -> None:
+    if not pathlib.Path("assets.pyxres").exists():
+        data = pathlib.Path("assets.pyxres.b64").read_text()
+        with open("assets.pyxres", "wb") as f:
+            f.write(base64.b64decode(data))
 
 
 class Bullet:
@@ -125,6 +134,8 @@ class UFO:
 class Game:
     def __init__(self) -> None:
         pyxel.init(160, 120, title="Pyxel Invader")
+        ensure_assets()
+        pyxel.load("assets.pyxres")
         self.player = Player()
         self.invaders = InvaderGroup()
         self.enemy_bullets: List[Bullet] = []
