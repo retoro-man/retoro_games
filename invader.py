@@ -2,7 +2,6 @@ import random
 import pyxel
 from typing import List, Optional
 
-
 class Bullet:
     def __init__(self, x: int, y: int, dy: int):
         self.x = x
@@ -15,7 +14,6 @@ class Bullet:
 
     def draw(self, color: int) -> None:
         pyxel.rect(self.x, self.y, 1, 4, color)
-
 
 class Player:
     def __init__(self) -> None:
@@ -38,7 +36,6 @@ class Player:
         if self.bullet:
             self.bullet.draw(7)
 
-
 class Invader:
     def __init__(self, x: int, y: int, score: int) -> None:
         self.x = x
@@ -47,7 +44,6 @@ class Invader:
 
     def draw(self) -> None:
         pyxel.rect(self.x, self.y, 8, 8, 11)
-
 
 class InvaderGroup:
     def __init__(self) -> None:
@@ -81,7 +77,6 @@ class InvaderGroup:
     def bottom(self) -> int:
         return max(inv.y for inv in self.invaders) if self.invaders else 0
 
-
 class Barrier:
     def __init__(self, x: int, y: int) -> None:
         self.blocks = []
@@ -103,7 +98,6 @@ class Barrier:
                 color = 3 if block['hp'] == 3 else 7 if block['hp'] == 2 else 8
                 pyxel.rect(block['x'], block['y'], 3, 3, color)
 
-
 class UFO:
     def __init__(self) -> None:
         if random.choice([True, False]):
@@ -120,7 +114,6 @@ class UFO:
 
     def draw(self) -> None:
         pyxel.rect(self.x, self.y, 16, 6, 8)
-
 
 class Game:
     def __init__(self) -> None:
@@ -214,14 +207,5 @@ class Game:
             pyxel.text(pyxel.width // 2 - 20, pyxel.height // 2, msg, 7)
             pyxel.text(pyxel.width // 2 - 40, pyxel.height // 2 + 10, "PRESS ENTER TO RESTART", 7)
 
-
-    def main():
-        Game()
-
-    try:
-        __PyxelLauncher__
-    except NameError:
-        if __name__ == "__main__":
-            main()
-    else:
-        main()
+# ★ Web用Pyxelランチャー対応：この1行だけでOK！
+Game()
