@@ -215,5 +215,13 @@ class Game:
             pyxel.text(pyxel.width // 2 - 40, pyxel.height // 2 + 10, "PRESS ENTER TO RESTART", 7)
 
 
-if __name__ == "__main__":
-    Game()
+    def main():
+        Game()
+
+    try:
+        __PyxelLauncher__
+    except NameError:
+        if __name__ == "__main__":
+            main()
+    else:
+        main()
