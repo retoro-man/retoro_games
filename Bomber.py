@@ -14,29 +14,31 @@ from dataclasses import dataclass
 
 import pyxel
 
-# --- Mobile-friendly input bridge: map virtual GAMEPAD -> existing keyboard checks ---
+# --- Mobile-friendly input bridge (virtual gamepad -> existing keyboard checks) ---
+# 仮想ゲームパッド（GAMEPAD1_...）の入力を、既存のキーボード判定(pyxel.btn/btnp)に合流させる。
 try:
-    MAPPING = {
+    _MOBILE_INPUT_MAP = {
         pyxel.KEY_RIGHT: (pyxel.GAMEPAD1_BUTTON_DPAD_RIGHT,),
         pyxel.KEY_LEFT:  (pyxel.GAMEPAD1_BUTTON_DPAD_LEFT,),
         pyxel.KEY_DOWN:  (pyxel.GAMEPAD1_BUTTON_DPAD_DOWN,),
         pyxel.KEY_UP:    (pyxel.GAMEPAD1_BUTTON_DPAD_UP,),
-        pyxel.KEY_D: (pyxel.GAMEPAD1_BUTTON_DPAD_RIGHT,),
-        pyxel.KEY_A: (pyxel.GAMEPAD1_BUTTON_DPAD_LEFT,),
-        pyxel.KEY_S: (pyxel.GAMEPAD1_BUTTON_DPAD_DOWN,),
-        pyxel.KEY_W: (pyxel.GAMEPAD1_BUTTON_DPAD_UP,),
-        pyxel.KEY_Z:      (pyxel.GAMEPAD1_BUTTON_A, pyxel.GAMEPAD1_BUTTON_B),
-        pyxel.KEY_SPACE:  (pyxel.GAMEPAD1_BUTTON_A,),
-        pyxel.KEY_RETURN: (pyxel.GAMEPAD1_BUTTON_START,),
-        pyxel.KEY_P:      (pyxel.GAMEPAD1_BUTTON_START,),   # Pause
-        pyxel.KEY_R:      (pyxel.GAMEPAD1_BUTTON_SELECT,),  # Restart
-        pyxel.KEY_Q:      (pyxel.GAMEPAD1_BUTTON_SHOULDER_L,),  # Back to Title
+        pyxel.KEY_D:     (pyxel.GAMEPAD1_BUTTON_DPAD_RIGHT,),
+        pyxel.KEY_A:     (pyxel.GAMEPAD1_BUTTON_DPAD_LEFT,),
+        pyxel.KEY_S:     (pyxel.GAMEPAD1_BUTTON_DPAD_DOWN,),
+        pyxel.KEY_W:     (pyxel.GAMEPAD1_BUTTON_DPAD_UP,),
+        pyxel.KEY_Z:     (pyxel.GAMEPAD1_BUTTON_A, pyxel.GAMEPAD1_BUTTON_B),
+        pyxel.KEY_SPACE: (pyxel.GAMEPAD1_BUTTON_A,),
+        pyxel.KEY_RETURN:(pyxel.GAMEPAD1_BUTTON_START,),
+        pyxel.KEY_P:     (pyxel.GAMEPAD1_BUTTON_START,),
+        pyxel.KEY_R:     (pyxel.GAMEPAD1_BUTTON_SELECT,),
+        pyxel.KEY_Q:     (pyxel.GAMEPAD1_BUTTON_SHOULDER_L,),
     }
     _orig_btn, _orig_btnp = pyxel.btn, pyxel.btnp
-    def _btn(code):  return _orig_btn(code)  or any(_orig_btn(c)  for c in MAPPING.get(code, ()))
-    def _btnp(code): return _orig_btnp(code) or any(_orig_btnp(c) for c in MAPPING.get(code, ()))
+    def _btn(code):  return _orig_btn(code)  or any(_orig_btn(c)  for c in _MOBILE_INPUT_MAP.get(code, ()))
+    def _btnp(code): return _orig_btnp(code) or any(_orig_btnp(c) for c in _MOBILE_INPUT_MAP.get(code, ()))
     pyxel.btn, pyxel.btnp = _btn, _btnp
 except Exception:
+    # Pyxelバージョン差などでGAMEPAD定数が無い場合はそのまま
     pass
 # --- end bridge ---
 
@@ -153,7 +155,7 @@ class Player:
 
 class Game:
     def __init__(self):
-        pyxel.init(W, H, title="Bomber-Pyxel", fps=FPS)
+        pyxel.init(W, H, title="Bomber-Pyxel", fps=FPS, display_scale=3)
         self.state = TITLE
         self.stage = 1
         self._init_sounds()
