@@ -14,22 +14,17 @@ from dataclasses import dataclass
 
 import pyxel
 
-# --- Mobile-friendly input bridge (virtual gamepad -> existing keyboard checks) ---
-# Pyxel Webの仮想ゲームパッドを、既存のキーボード判定(pyxel.btn/btnp)に合流させます。
+# --- Mobile-friendly input bridge: map virtual GAMEPAD -> existing keyboard checks ---
 try:
     MAPPING = {
         pyxel.KEY_RIGHT: (pyxel.GAMEPAD1_BUTTON_DPAD_RIGHT,),
         pyxel.KEY_LEFT:  (pyxel.GAMEPAD1_BUTTON_DPAD_LEFT,),
         pyxel.KEY_DOWN:  (pyxel.GAMEPAD1_BUTTON_DPAD_DOWN,),
         pyxel.KEY_UP:    (pyxel.GAMEPAD1_BUTTON_DPAD_UP,),
-
-        # WASDもDPADに対応
         pyxel.KEY_D: (pyxel.GAMEPAD1_BUTTON_DPAD_RIGHT,),
         pyxel.KEY_A: (pyxel.GAMEPAD1_BUTTON_DPAD_LEFT,),
         pyxel.KEY_S: (pyxel.GAMEPAD1_BUTTON_DPAD_DOWN,),
         pyxel.KEY_W: (pyxel.GAMEPAD1_BUTTON_DPAD_UP,),
-
-        # アクション／開始／再開など
         pyxel.KEY_Z:      (pyxel.GAMEPAD1_BUTTON_A, pyxel.GAMEPAD1_BUTTON_B),
         pyxel.KEY_SPACE:  (pyxel.GAMEPAD1_BUTTON_A,),
         pyxel.KEY_RETURN: (pyxel.GAMEPAD1_BUTTON_START,),
@@ -42,7 +37,6 @@ try:
     def _btnp(code): return _orig_btnp(code) or any(_orig_btnp(c) for c in MAPPING.get(code, ()))
     pyxel.btn, pyxel.btnp = _btn, _btnp
 except Exception:
-    # もし古いPyxel等でGAMEPAD定数が無ければ無視
     pass
 # --- end bridge ---
 
