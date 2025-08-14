@@ -42,6 +42,14 @@ except Exception:
     pass
 # --- end bridge ---
 
+# --- Input helper utilities (keyboard + gamepad) ---
+def btn_any(*codes):
+    return any(pyxel.btn(c) for c in codes)
+
+def btnp_any(*codes):
+    return any(pyxel.btnp(c) for c in codes)
+# --- end helpers ---
+
 
 # --------------- Constants ---------------
 TILE = 16
@@ -240,7 +248,7 @@ class Game:
         if self.state == TITLE:
             self.update_title()
         elif self.state == PLAYING:
-            if pyxel.btnp(pyxel.KEY_P):
+            if btnp_any(pyxel.KEY_P, pyxel.GAMEPAD1_BUTTON_START):
                 self.pause = not self.pause
             if self.pause:
                 return
@@ -250,14 +258,14 @@ class Game:
 
     def update_title(self):
         self.title_blink = (self.title_blink + 1) % FPS
-        if pyxel.btnp(pyxel.KEY_Z) or pyxel.btnp(pyxel.KEY_SPACE) or pyxel.btnp(pyxel.KEY_RETURN):
+        if btnp_any(pyxel.KEY_Z, pyxel.KEY_SPACE, pyxel.KEY_RETURN, pyxel.GAMEPAD1_BUTTON_A, pyxel.GAMEPAD1_BUTTON_B, pyxel.GAMEPAD1_BUTTON_START):
             self.state = PLAYING
         if pyxel.btnp(pyxel.KEY_R):
             self.stage = 1
             self.reset_stage()
 
     def update_result(self):
-        if pyxel.btnp(pyxel.KEY_R) or pyxel.btnp(pyxel.KEY_Z) or pyxel.btnp(pyxel.KEY_SPACE):
+        if btnp_any(pyxel.KEY_R, pyxel.KEY_Z, pyxel.KEY_SPACE, pyxel.GAMEPAD1_BUTTON_A, pyxel.GAMEPAD1_BUTTON_B, pyxel.GAMEPAD1_BUTTON_START, pyxel.GAMEPAD1_BUTTON_SELECT):
             if self.state == CLEAR:
                 self.stage += 1
             self.reset_stage()
@@ -268,7 +276,7 @@ class Game:
         if pyxel.btnp(pyxel.KEY_R):
             self.reset_stage()
             return
-        if pyxel.btnp(pyxel.KEY_Z) or pyxel.btnp(pyxel.KEY_SPACE):
+        if btnp_any(pyxel.KEY_Z, pyxel.KEY_SPACE, pyxel.GAMEPAD1_BUTTON_A, pyxel.GAMEPAD1_BUTTON_B):
             self._place_bomb()
 
         self._update_player_gridstep()
@@ -304,18 +312,18 @@ class Game:
     def _read_dir_priority(self):
         # まず「押された瞬間(btnp)」を優先、なければ「押されている(btn)」順で採用
         choices = [
-            ((1,0), (pyxel.KEY_RIGHT, pyxel.KEY_D)),
-            ((-1,0), (pyxel.KEY_LEFT,  pyxel.KEY_A)),
-            ((0,1),  (pyxel.KEY_DOWN,  pyxel.KEY_S)),
-            ((0,-1), (pyxel.KEY_UP,    pyxel.KEY_W)),
+            ((1,0), (pyxel.KEY_RIGHT, pyxel.KEY_D, pyxel.GAMEPAD1_BUTTON_DPAD_RIGHT)),
+            ((-1,0), (pyxel.KEY_LEFT,  pyxel.KEY_A, pyxel.GAMEPAD1_BUTTON_DPAD_LEFT)),
+            ((0,1),  (pyxel.KEY_DOWN,  pyxel.KEY_S, pyxel.GAMEPAD1_BUTTON_DPAD_DOWN)),
+            ((0,-1), (pyxel.KEY_UP,    pyxel.KEY_W, pyxel.GAMEPAD1_BUTTON_DPAD_UP)),
         ]
         # btnp 優先
-        for (dx,dy), (k1,k2) in choices:
-            if pyxel.btnp(k1) or pyxel.btnp(k2):
+        for (dx,dy), keys in choices:
+            if any(pyxel.btnp(k) for k in keys):
                 return dx, dy
         # btn のフォールバック
-        for (dx,dy), (k1,k2) in choices:
-            if pyxel.btn(k1) or pyxel.btn(k2):
+        for (dx,dy), keys in choices:
+            if any(pyxel.btn(k) for k in keys):
                 return dx, dy
         return 0, 0
 
@@ -578,7 +586,7 @@ class Game:
         s = "BOMBER-PYXEL"
         self._shadow_text((W - len(s) * 4) // 2, 40, s, 7)
         self._shadow_text((W - 11 * 4) // 2, 60, f"STAGE {self.stage}", 6)
-        hint = "PRESS Z / SPACE TO START"
+        hint = "PRESS Z / SPACE or A / START"
         if (self.title_blink // 30) % 2 == 0:
             self._shadow_text((W - len(hint) * 4) // 2, 88, hint, 10)
         self._shadow_text(16, 120, "ARROWS/WASD: MOVE (grid step)", 6)
