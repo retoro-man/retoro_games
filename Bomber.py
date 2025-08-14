@@ -13,7 +13,30 @@ import random
 from dataclasses import dataclass
 
 import pyxel
+# --- Mobile input helpers: accept pad + touch safely ---
+# 旧バージョンでも動くよう、ボタン定数を存在チェックしながら収集
+def _pad_consts():
+    def g(name): 
+        return getattr(pyxel, name, None)
+    return {
+        "A":      tuple(c for c in (g("GAMEPAD1_BUTTON_A"),      g("GAMEPAD1_BUTTON_0")) if c),
+        "B":      tuple(c for c in (g("GAMEPAD1_BUTTON_B"),      g("GAMEPAD1_BUTTON_1")) if c),
+        "START":  tuple(c for c in (g("GAMEPAD1_BUTTON_START"),  g("GAMEPAD1_BUTTON_7")) if c),
+        "SELECT": tuple(c for c in (g("GAMEPAD1_BUTTON_SELECT"), g("GAMEPAD1_BUTTON_6")) if c),
+        "UP":     tuple(c for c in (g("GAMEPAD1_BUTTON_DPAD_UP"),) if c),
+        "DOWN":   tuple(c for c in (g("GAMEPAD1_BUTTON_DPAD_DOWN"),) if c),
+        "LEFT":   tuple(c for c in (g("GAMEPAD1_BUTTON_DPAD_LEFT"),) if c),
+        "RIGHT":  tuple(c for c in (g("GAMEPAD1_BUTTON_DPAD_RIGHT"),) if c),
+    }
+PAD = _pad_consts()
 
+def btn_any(*codes):
+    codes = [c for c in codes if c is not None]
+    # iOSでbtnpの立ち上がりが稀に取りこぼされる対策としてbtnも併用
+    return any(pyxel.btnp(c) for c in codes) or (
+        pyxel.frame_count % 3 == 0 and any(pyxel.btn(c) for c in codes)
+    )
+# --- end helpers ---
 # --- Mobile-friendly input bridge (virtual gamepad -> existing keyboard checks) ---
 # 仮想ゲームパッド（GAMEPAD1_...）の入力を、既存のキーボード判定(pyxel.btn/btnp)に合流させる。
 try:
@@ -258,7 +281,8 @@ class Game:
 
     def update_title(self):
         self.title_blink = (self.title_blink + 1) % FPS
-        if btnp_any(pyxel.KEY_Z, pyxel.KEY_SPACE, pyxel.KEY_RETURN, pyxel.GAMEPAD1_BUTTON_A, pyxel.GAMEPAD1_BUTTON_B, pyxel.GAMEPAD1_BUTTON_START):
+        if btn_any(pyxel.KEY_Z, pyxel.KEY_SPACE, pyxel.KEY_RETURN, *PAD["A"], *PAD["B"], *PAD["START"]) \
+           or pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
             self.state = PLAYING
         if pyxel.btnp(pyxel.KEY_R):
             self.stage = 1
