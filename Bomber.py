@@ -13,8 +13,7 @@ import random
 from dataclasses import dataclass
 
 import pyxel
-# === Mobile Input Helpers (production) ===
-# Mouse left (compat across Pyxel versions)
+# === Virtual Pad Helpers (A/B/X/Y + DPAD) ===
 try:
     MOUSE_LEFT = pyxel.MOUSE_BUTTON_LEFT
 except AttributeError:
@@ -28,21 +27,21 @@ def _gp(name, idx=None):
         return getattr(pyxel, f"GAMEPAD1_BUTTON_{idx}", None)
     return None
 
-# Confirmed on your device: START/SELECT available (keep 7/6 as fallback)
 PAD_RIGHT  = _gp("GAMEPAD1_BUTTON_DPAD_RIGHT")
 PAD_LEFT   = _gp("GAMEPAD1_BUTTON_DPAD_LEFT")
 PAD_DOWN   = _gp("GAMEPAD1_BUTTON_DPAD_DOWN")
 PAD_UP     = _gp("GAMEPAD1_BUTTON_DPAD_UP")
-PAD_A      = _gp("GAMEPAD1_BUTTON_A", 0)
-PAD_B      = _gp("GAMEPAD1_BUTTON_B", 1)
-PAD_START  = _gp("GAMEPAD1_BUTTON_START", 7)
-PAD_SELECT = _gp("GAMEPAD1_BUTTON_SELECT", 6)
+
+# Virtual pad exposes A/B/X/Y. Keep numeric fallbacks (0..3) as safety.
+PAD_A = _gp("GAMEPAD1_BUTTON_A", 0)
+PAD_B = _gp("GAMEPAD1_BUTTON_B", 1)
+PAD_X = _gp("GAMEPAD1_BUTTON_X", 2)
+PAD_Y = _gp("GAMEPAD1_BUTTON_Y", 3)
 
 def pressed_or_edge(*codes, grace=3):
-    """Edge or (every few frames) held — helps iOS where btnp can be missed."""
     codes = [c for c in codes if c is not None]
     return any(pyxel.btnp(c) for c in codes) or (pyxel.frame_count % grace == 0 and any(pyxel.btn(c) for c in codes))
-# === end Mobile Input Helpers ===
+# === end Virtual Pad Helpers ===
 
 
 # --------------- Constants ---------------
@@ -242,7 +241,7 @@ class Game:
         if self.state == TITLE:
             self.update_title()
         elif self.state == PLAYING:
-            if pressed_or_edge(pyxel.KEY_P, PAD_START):
+            if pressed_or_edge(pyxel.KEY_P, PAD_X):
                 self.pause = not self.pause
             if self.pause:
                 return
@@ -251,31 +250,17 @@ class Game:
             self.update_result()
 
     def update_title(self):
-
-        # --- EARLY START (production) ---
-        if pressed_or_edge(pyxel.KEY_Z, pyxel.KEY_SPACE, pyxel.KEY_RETURN, PAD_A, PAD_B, PAD_START) \
-           or (MOUSE_LEFT is not None and pyxel.btnp(MOUSE_LEFT)):
-            try:
-                self.state = PLAYING
-            except Exception:
-                try:
-                    self.mode = PLAYING
-                except Exception:
-                    try:
-                        self.scene = PLAYING
-                    except Exception:
-                        pass
-            return
-        # --- END EARLY START ---
         self.title_blink = (self.title_blink + 1) % FPS
-        if pyxel.btnp(pyxel.KEY_Z) or pyxel.btnp(pyxel.KEY_SPACE) or pyxel.btnp(pyxel.KEY_RETURN):
+        if pressed_or_edge(pyxel.KEY_Z, pyxel.KEY_SPACE, pyxel.KEY_RETURN, PAD_A, PAD_B, PAD_X, PAD_Y) or (MOUSE_LEFT is not None and pyxel.btnp(MOUSE_LEFT)):
             self.state = PLAYING
-        if pressed_or_edge(pyxel.KEY_R, PAD_SELECT):
+            return
+            self.state = PLAYING
+        if pressed_or_edge(pyxel.KEY_R, PAD_Y):
             self.stage = 1
             self.reset_stage()
 
     def update_result(self):
-        if pressed_or_edge(pyxel.KEY_R, PAD_SELECT) or pyxel.btnp(pyxel.KEY_Z) or pyxel.btnp(pyxel.KEY_SPACE):
+        if pressed_or_edge(pyxel.KEY_R, PAD_Y) or pyxel.btnp(pyxel.KEY_Z) or pyxel.btnp(pyxel.KEY_SPACE):
             if self.state == CLEAR:
                 self.stage += 1
             self.reset_stage()
@@ -283,7 +268,7 @@ class Game:
 
     def update_playing(self):
         self.frame += 1
-        if pressed_or_edge(pyxel.KEY_R, PAD_SELECT):
+        if pressed_or_edge(pyxel.KEY_R, PAD_Y):
             self.reset_stage()
             return
         if pressed_or_edge(pyxel.KEY_Z, pyxel.KEY_SPACE, PAD_A, PAD_B):
@@ -596,7 +581,7 @@ class Game:
         s = "BOMBER-PYXEL"
         self._shadow_text((W - len(s) * 4) // 2, 40, s, 7)
         self._shadow_text((W - 11 * 4) // 2, 60, f"STAGE {self.stage}", 6)
-        hint = "PRESS Z / SPACE or A / START"
+        hint = "PRESS A / B / X / Y or Z / SPACE to START"
         if (self.title_blink // 30) % 2 == 0:
             self._shadow_text((W - len(hint) * 4) // 2, 88, hint, 10)
         self._shadow_text(16, 120, "ARROWS/WASD: MOVE (grid step)", 6)
