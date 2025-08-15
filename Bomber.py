@@ -13,39 +13,36 @@ import random
 from dataclasses import dataclass
 
 import pyxel
-# === Mobile Minimal Helpers (works on Web virtual pad) ===
+# === Mobile Input Helpers (production) ===
 # Mouse left (compat across Pyxel versions)
 try:
     MOUSE_LEFT = pyxel.MOUSE_BUTTON_LEFT
 except AttributeError:
     MOUSE_LEFT = getattr(pyxel, "MOUSE_LEFT_BUTTON", None)
 
-def _pad_code(name_or_idx):
-    if isinstance(name_or_idx, int):
-        return getattr(pyxel, f"GAMEPAD1_BUTTON_{name_or_idx}", None)
-    return getattr(pyxel, name_or_idx, None)
+def _gp(name, idx=None):
+    c = getattr(pyxel, name, None)
+    if c is not None:
+        return c
+    if idx is not None:
+        return getattr(pyxel, f"GAMEPAD1_BUTTON_{idx}", None)
+    return None
 
-def pad_codes(*names_or_idx):
-    out = []
-    for nm in names_or_idx:
-        c = _pad_code(nm)
-        if c is not None:
-            out.append(c)
-    return tuple(out)
-
-# Common pad bundles (names + numbered fallback for safety)
-PAD_A_B_START = pad_codes("GAMEPAD1_BUTTON_A","GAMEPAD1_BUTTON_B","GAMEPAD1_BUTTON_START", 0,1,7)
-PAD_START_ONLY = pad_codes("GAMEPAD1_BUTTON_START","GAMEPAD1_BUTTON_SELECT", 7,6)
-PAD_DPAD = pad_codes("GAMEPAD1_BUTTON_DPAD_RIGHT","GAMEPAD1_BUTTON_DPAD_LEFT",
-                     "GAMEPAD1_BUTTON_DPAD_UP","GAMEPAD1_BUTTON_DPAD_DOWN")
+# Confirmed on your device: START/SELECT available (keep 7/6 as fallback)
+PAD_RIGHT  = _gp("GAMEPAD1_BUTTON_DPAD_RIGHT")
+PAD_LEFT   = _gp("GAMEPAD1_BUTTON_DPAD_LEFT")
+PAD_DOWN   = _gp("GAMEPAD1_BUTTON_DPAD_DOWN")
+PAD_UP     = _gp("GAMEPAD1_BUTTON_DPAD_UP")
+PAD_A      = _gp("GAMEPAD1_BUTTON_A", 0)
+PAD_B      = _gp("GAMEPAD1_BUTTON_B", 1)
+PAD_START  = _gp("GAMEPAD1_BUTTON_START", 7)
+PAD_SELECT = _gp("GAMEPAD1_BUTTON_SELECT", 6)
 
 def pressed_or_edge(*codes, grace=3):
-    # True on edge OR (every few frames) while held; helps iOS where btnp can be missed.
+    """Edge or (every few frames) held — helps iOS where btnp can be missed."""
     codes = [c for c in codes if c is not None]
     return any(pyxel.btnp(c) for c in codes) or (pyxel.frame_count % grace == 0 and any(pyxel.btn(c) for c in codes))
-# === end helpers ===
-
-
+# === end Mobile Input Helpers ===
 
 
 # --------------- Constants ---------------
@@ -245,7 +242,7 @@ class Game:
         if self.state == TITLE:
             self.update_title()
         elif self.state == PLAYING:
-            if pressed_or_edge(pyxel.KEY_P, *PAD_START_ONLY):
+            if pressed_or_edge(pyxel.KEY_P, PAD_START):
                 self.pause = not self.pause
             if self.pause:
                 return
@@ -255,8 +252,8 @@ class Game:
 
     def update_title(self):
 
-        # --- EARLY START (mobile-friendly) ---
-        if pressed_or_edge(pyxel.KEY_Z, pyxel.KEY_SPACE, pyxel.KEY_RETURN, *PAD_A_B_START) \
+        # --- EARLY START (production) ---
+        if pressed_or_edge(pyxel.KEY_Z, pyxel.KEY_SPACE, pyxel.KEY_RETURN, PAD_A, PAD_B, PAD_START) \
            or (MOUSE_LEFT is not None and pyxel.btnp(MOUSE_LEFT)):
             try:
                 self.state = PLAYING
@@ -273,12 +270,12 @@ class Game:
         self.title_blink = (self.title_blink + 1) % FPS
         if pyxel.btnp(pyxel.KEY_Z) or pyxel.btnp(pyxel.KEY_SPACE) or pyxel.btnp(pyxel.KEY_RETURN):
             self.state = PLAYING
-        if pressed_or_edge(pyxel.KEY_R, *PAD_START_ONLY):
+        if pressed_or_edge(pyxel.KEY_R, PAD_SELECT):
             self.stage = 1
             self.reset_stage()
 
     def update_result(self):
-        if pressed_or_edge(pyxel.KEY_R, *PAD_START_ONLY) or pyxel.btnp(pyxel.KEY_Z) or pyxel.btnp(pyxel.KEY_SPACE):
+        if pressed_or_edge(pyxel.KEY_R, PAD_SELECT) or pyxel.btnp(pyxel.KEY_Z) or pyxel.btnp(pyxel.KEY_SPACE):
             if self.state == CLEAR:
                 self.stage += 1
             self.reset_stage()
@@ -286,10 +283,10 @@ class Game:
 
     def update_playing(self):
         self.frame += 1
-        if pressed_or_edge(pyxel.KEY_R, *PAD_START_ONLY):
+        if pressed_or_edge(pyxel.KEY_R, PAD_SELECT):
             self.reset_stage()
             return
-        if pressed_or_edge(pyxel.KEY_Z, pyxel.KEY_SPACE, *PAD_A_B_START):
+        if pressed_or_edge(pyxel.KEY_Z, pyxel.KEY_SPACE, PAD_A, PAD_B):
             self._place_bomb()
 
         self._update_player_gridstep()
@@ -325,10 +322,10 @@ class Game:
     def _read_dir_priority(self):
         # まず「押された瞬間(btnp)」を優先、なければ「押されている(btn)」順で採用
         choices = [
-            ((1,0), (pyxel.KEY_RIGHT, pyxel.KEY_D, PAD_DPAD[0] if len(PAD_DPAD)>0 else None)),
-            ((-1,0), (pyxel.KEY_LEFT,  pyxel.KEY_A, PAD_DPAD[1] if len(PAD_DPAD)>1 else None)),
-            ((0,1),  (pyxel.KEY_DOWN,  pyxel.KEY_S, PAD_DPAD[3] if len(PAD_DPAD)>3 else None)),
-            ((0,-1), (pyxel.KEY_UP,    pyxel.KEY_W, PAD_DPAD[2] if len(PAD_DPAD)>2 else None)),
+            ((1,0), (pyxel.KEY_RIGHT, pyxel.KEY_D, PAD_RIGHT)),
+            ((-1,0), (pyxel.KEY_LEFT,  pyxel.KEY_A, PAD_LEFT)),
+            ((0,1),  (pyxel.KEY_DOWN,  pyxel.KEY_S, PAD_DOWN)),
+            ((0,-1), (pyxel.KEY_UP,    pyxel.KEY_W, PAD_UP)),
         ]
         # btnp 優先
         for (dx,dy), keys in choices:
@@ -599,7 +596,7 @@ class Game:
         s = "BOMBER-PYXEL"
         self._shadow_text((W - len(s) * 4) // 2, 40, s, 7)
         self._shadow_text((W - 11 * 4) // 2, 60, f"STAGE {self.stage}", 6)
-        hint = "PRESS Z / SPACE TO START"
+        hint = "PRESS Z / SPACE or A / START"
         if (self.title_blink // 30) % 2 == 0:
             self._shadow_text((W - len(hint) * 4) // 2, 88, hint, 10)
         self._shadow_text(16, 120, "ARROWS/WASD: MOVE (grid step)", 6)
