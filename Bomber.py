@@ -13,7 +13,8 @@ import random
 from dataclasses import dataclass
 
 import pyxel
-# === Mobile Start Helpers (minimal) ===
+# === Mobile Minimal Helpers (works on Web virtual pad) ===
+# Mouse left (compat across Pyxel versions)
 try:
     MOUSE_LEFT = pyxel.MOUSE_BUTTON_LEFT
 except AttributeError:
@@ -24,34 +25,24 @@ def _pad_code(name_or_idx):
         return getattr(pyxel, f"GAMEPAD1_BUTTON_{name_or_idx}", None)
     return getattr(pyxel, name_or_idx, None)
 
-def pad_btnp_any(*names_or_idx):
+def pad_codes(*names_or_idx):
+    out = []
     for nm in names_or_idx:
         c = _pad_code(nm)
-        if c is not None and pyxel.btnp(c):
-            return True
-    return False
+        if c is not None:
+            out.append(c)
+    return tuple(out)
 
-def pad_btn_any(*names_or_idx):
-    for nm in names_or_idx:
-        c = _pad_code(nm)
-        if c is not None and pyxel.btn(c):
-            return True
-    return False
+# Common pad bundles (names + numbered fallback for safety)
+PAD_A_B_START = pad_codes("GAMEPAD1_BUTTON_A","GAMEPAD1_BUTTON_B","GAMEPAD1_BUTTON_START", 0,1,7)
+PAD_START_ONLY = pad_codes("GAMEPAD1_BUTTON_START","GAMEPAD1_BUTTON_SELECT", 7,6)
+PAD_DPAD = pad_codes("GAMEPAD1_BUTTON_DPAD_RIGHT","GAMEPAD1_BUTTON_DPAD_LEFT",
+                     "GAMEPAD1_BUTTON_DPAD_UP","GAMEPAD1_BUTTON_DPAD_DOWN")
 
 def pressed_or_edge(*codes, grace=3):
+    # True on edge OR (every few frames) while held; helps iOS where btnp can be missed.
     codes = [c for c in codes if c is not None]
     return any(pyxel.btnp(c) for c in codes) or (pyxel.frame_count % grace == 0 and any(pyxel.btn(c) for c in codes))
-
-def _set_playing(self):
-    # Try common state attribute names
-    for attr in ("state","mode","scene","game_state"):
-        if hasattr(self, attr):
-            try:
-                setattr(self, attr, PLAYING)
-                return True
-            except Exception:
-                pass
-    return False
 # === end helpers ===
 
 
@@ -248,27 +239,13 @@ class Game:
 
     # --------------- Update Loop ---------------
     def update(self):
-
-        # --- GLOBAL EARLY START (universal) ---
-        try:
-            is_title = (getattr(self, "state", None) == TITLE) or (getattr(self, "mode", None) == TITLE) or (getattr(self, "scene", None) == TITLE) or (getattr(self, "game_state", None) == TITLE)
-        except Exception:
-            is_title = False
-        if is_title and (
-            pressed_or_edge(pyxel.KEY_Z, pyxel.KEY_SPACE, pyxel.KEY_RETURN)
-            or pad_btnp_any("GAMEPAD1_BUTTON_A","GAMEPAD1_BUTTON_B","GAMEPAD1_BUTTON_START", 0,1,7)
-            or (MOUSE_LEFT is not None and pyxel.btnp(MOUSE_LEFT))
-        ):
-            if _set_playing(self):
-                return
-        # --- END GLOBAL EARLY START ---
         if pyxel.btnp(pyxel.KEY_Q):
             self.state = TITLE
 
         if self.state == TITLE:
             self.update_title()
         elif self.state == PLAYING:
-            if pyxel.btnp(pyxel.KEY_P):
+            if pressed_or_edge(pyxel.KEY_P, *PAD_START_ONLY):
                 self.pause = not self.pause
             if self.pause:
                 return
@@ -278,22 +255,30 @@ class Game:
 
     def update_title(self):
 
-        # --- EARLY START (universal) ---
-        if (pressed_or_edge(pyxel.KEY_Z, pyxel.KEY_SPACE, pyxel.KEY_RETURN)
-            or pad_btnp_any("GAMEPAD1_BUTTON_A","GAMEPAD1_BUTTON_B","GAMEPAD1_BUTTON_START", 0,1,7)
-            or (MOUSE_LEFT is not None and pyxel.btnp(MOUSE_LEFT))):
-            if _set_playing(self):
-                return
+        # --- EARLY START (mobile-friendly) ---
+        if pressed_or_edge(pyxel.KEY_Z, pyxel.KEY_SPACE, pyxel.KEY_RETURN, *PAD_A_B_START) \
+           or (MOUSE_LEFT is not None and pyxel.btnp(MOUSE_LEFT)):
+            try:
+                self.state = PLAYING
+            except Exception:
+                try:
+                    self.mode = PLAYING
+                except Exception:
+                    try:
+                        self.scene = PLAYING
+                    except Exception:
+                        pass
+            return
         # --- END EARLY START ---
         self.title_blink = (self.title_blink + 1) % FPS
         if pyxel.btnp(pyxel.KEY_Z) or pyxel.btnp(pyxel.KEY_SPACE) or pyxel.btnp(pyxel.KEY_RETURN):
             self.state = PLAYING
-        if pyxel.btnp(pyxel.KEY_R):
+        if pressed_or_edge(pyxel.KEY_R, *PAD_START_ONLY):
             self.stage = 1
             self.reset_stage()
 
     def update_result(self):
-        if pyxel.btnp(pyxel.KEY_R) or pyxel.btnp(pyxel.KEY_Z) or pyxel.btnp(pyxel.KEY_SPACE):
+        if pressed_or_edge(pyxel.KEY_R, *PAD_START_ONLY) or pyxel.btnp(pyxel.KEY_Z) or pyxel.btnp(pyxel.KEY_SPACE):
             if self.state == CLEAR:
                 self.stage += 1
             self.reset_stage()
@@ -301,10 +286,10 @@ class Game:
 
     def update_playing(self):
         self.frame += 1
-        if pyxel.btnp(pyxel.KEY_R):
+        if pressed_or_edge(pyxel.KEY_R, *PAD_START_ONLY):
             self.reset_stage()
             return
-        if pyxel.btnp(pyxel.KEY_Z) or pyxel.btnp(pyxel.KEY_SPACE):
+        if pressed_or_edge(pyxel.KEY_Z, pyxel.KEY_SPACE, *PAD_A_B_START):
             self._place_bomb()
 
         self._update_player_gridstep()
@@ -340,18 +325,18 @@ class Game:
     def _read_dir_priority(self):
         # まず「押された瞬間(btnp)」を優先、なければ「押されている(btn)」順で採用
         choices = [
-            ((1,0), (pyxel.KEY_RIGHT, pyxel.KEY_D)),
-            ((-1,0), (pyxel.KEY_LEFT,  pyxel.KEY_A)),
-            ((0,1),  (pyxel.KEY_DOWN,  pyxel.KEY_S)),
-            ((0,-1), (pyxel.KEY_UP,    pyxel.KEY_W)),
+            ((1,0), (pyxel.KEY_RIGHT, pyxel.KEY_D, PAD_DPAD[0] if len(PAD_DPAD)>0 else None)),
+            ((-1,0), (pyxel.KEY_LEFT,  pyxel.KEY_A, PAD_DPAD[1] if len(PAD_DPAD)>1 else None)),
+            ((0,1),  (pyxel.KEY_DOWN,  pyxel.KEY_S, PAD_DPAD[3] if len(PAD_DPAD)>3 else None)),
+            ((0,-1), (pyxel.KEY_UP,    pyxel.KEY_W, PAD_DPAD[2] if len(PAD_DPAD)>2 else None)),
         ]
         # btnp 優先
-        for (dx,dy), (k1,k2) in choices:
-            if pyxel.btnp(k1) or pyxel.btnp(k2):
+        for (dx,dy), keys in choices:
+            if any((k is not None and pyxel.btnp(k)) for k in keys):
                 return dx, dy
         # btn のフォールバック
-        for (dx,dy), (k1,k2) in choices:
-            if pyxel.btn(k1) or pyxel.btn(k2):
+        for (dx,dy), keys in choices:
+            if any((k is not None and pyxel.btn(k)) for k in keys):
                 return dx, dy
         return 0, 0
 
