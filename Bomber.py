@@ -13,8 +13,7 @@ import random
 from dataclasses import dataclass
 
 import pyxel
-# === VPAD HELPERS START ===
-# Virtual pad helpers for Web (A/B/X/Y + DPAD) and tap on mobile
+# === VPAD STARTFIX (production) ===
 try:
     MOUSE_LEFT = pyxel.MOUSE_BUTTON_LEFT
 except AttributeError:
@@ -28,6 +27,7 @@ def _gp(name, idx=None):
         return getattr(pyxel, f"GAMEPAD1_BUTTON_{idx}", None)
     return None
 
+# DPAD and face buttons (A/B/X/Y). Numeric fallbacks cover some runtimes.
 PAD_RIGHT  = _gp("GAMEPAD1_BUTTON_DPAD_RIGHT")
 PAD_LEFT   = _gp("GAMEPAD1_BUTTON_DPAD_LEFT")
 PAD_DOWN   = _gp("GAMEPAD1_BUTTON_DPAD_DOWN")
@@ -38,10 +38,70 @@ PAD_X = _gp("GAMEPAD1_BUTTON_X", 2)
 PAD_Y = _gp("GAMEPAD1_BUTTON_Y", 3)
 
 def pressed_or_edge(*codes, grace=3):
-    """True on edge or (every few frames) while held; helps iOS where btnp can be missed."""
+    # True on edge OR (every few frames) while held (iOS/Safari can miss btnp)
     codes = [c for c in codes if c is not None]
     return any(pyxel.btnp(c) for c in codes) or (pyxel.frame_count % grace == 0 and any(pyxel.btn(c) for c in codes))
-# === VPAD HELPERS END ===
+# === end VPAD STARTFIX ===
+
+# --- Mobile input helpers: accept pad + touch safely ---
+# 旧バージョンでも動くよう、ボタン定数を存在チェックしながら収集
+def _pad_consts():
+    def g(name): 
+        return getattr(pyxel, name, None)
+    return {
+        "A":      tuple(c for c in (g("GAMEPAD1_BUTTON_A"),      g("GAMEPAD1_BUTTON_0")) if c),
+        "B":      tuple(c for c in (g("GAMEPAD1_BUTTON_B"),      g("GAMEPAD1_BUTTON_1")) if c),
+        "START":  tuple(c for c in (g("GAMEPAD1_BUTTON_START"),  g("GAMEPAD1_BUTTON_7")) if c),
+        "SELECT": tuple(c for c in (g("GAMEPAD1_BUTTON_SELECT"), g("GAMEPAD1_BUTTON_6")) if c),
+        "UP":     tuple(c for c in (g("GAMEPAD1_BUTTON_DPAD_UP"),) if c),
+        "DOWN":   tuple(c for c in (g("GAMEPAD1_BUTTON_DPAD_DOWN"),) if c),
+        "LEFT":   tuple(c for c in (g("GAMEPAD1_BUTTON_DPAD_LEFT"),) if c),
+        "RIGHT":  tuple(c for c in (g("GAMEPAD1_BUTTON_DPAD_RIGHT"),) if c),
+    }
+PAD = _pad_consts()
+
+def btn_any(*codes):
+    codes = [c for c in codes if c is not None]
+    # iOSでbtnpの立ち上がりが稀に取りこぼされる対策としてbtnも併用
+    return any(pyxel.btnp(c) for c in codes) or (
+        pyxel.frame_count % 3 == 0 and any(pyxel.btn(c) for c in codes)
+    )
+# --- end helpers ---
+# --- Mobile-friendly input bridge (virtual gamepad -> existing keyboard checks) ---
+# 仮想ゲームパッド（GAMEPAD1_...）の入力を、既存のキーボード判定(pyxel.btn/btnp)に合流させる。
+try:
+    _MOBILE_INPUT_MAP = {
+        pyxel.KEY_RIGHT: (pyxel.GAMEPAD1_BUTTON_DPAD_RIGHT,),
+        pyxel.KEY_LEFT:  (pyxel.GAMEPAD1_BUTTON_DPAD_LEFT,),
+        pyxel.KEY_DOWN:  (pyxel.GAMEPAD1_BUTTON_DPAD_DOWN,),
+        pyxel.KEY_UP:    (pyxel.GAMEPAD1_BUTTON_DPAD_UP,),
+        pyxel.KEY_D:     (pyxel.GAMEPAD1_BUTTON_DPAD_RIGHT,),
+        pyxel.KEY_A:     (pyxel.GAMEPAD1_BUTTON_DPAD_LEFT,),
+        pyxel.KEY_S:     (pyxel.GAMEPAD1_BUTTON_DPAD_DOWN,),
+        pyxel.KEY_W:     (pyxel.GAMEPAD1_BUTTON_DPAD_UP,),
+        pyxel.KEY_Z:     (pyxel.GAMEPAD1_BUTTON_A, pyxel.GAMEPAD1_BUTTON_B),
+        pyxel.KEY_SPACE: (pyxel.GAMEPAD1_BUTTON_A,),
+        pyxel.KEY_RETURN:(pyxel.GAMEPAD1_BUTTON_START,),
+        pyxel.KEY_P:     (pyxel.GAMEPAD1_BUTTON_START,),
+        pyxel.KEY_R:     (pyxel.GAMEPAD1_BUTTON_SELECT,),
+        pyxel.KEY_Q:     (pyxel.GAMEPAD1_BUTTON_SHOULDER_L,),
+    }
+    _orig_btn, _orig_btnp = pyxel.btn, pyxel.btnp
+    def _btn(code):  return _orig_btn(code)  or any(_orig_btn(c)  for c in _MOBILE_INPUT_MAP.get(code, ()))
+    def _btnp(code): return _orig_btnp(code) or any(_orig_btnp(c) for c in _MOBILE_INPUT_MAP.get(code, ()))
+    pyxel.btn, pyxel.btnp = _btn, _btnp
+except Exception:
+    # Pyxelバージョン差などでGAMEPAD定数が無い場合はそのまま
+    pass
+# --- end bridge ---
+
+# --- Input helper utilities (keyboard + gamepad) ---
+def btn_any(*codes):
+    return any(pyxel.btn(c) for c in codes)
+
+def btnp_any(*codes):
+    return any(pyxel.btnp(c) for c in codes)
+# --- end helpers ---
 
 
 # --------------- Constants ---------------
@@ -241,7 +301,7 @@ class Game:
         if self.state == TITLE:
             self.update_title()
         elif self.state == PLAYING:
-            if pressed_or_edge(pyxel.KEY_P, PAD_X):
+            if btnp_any(pyxel.KEY_P, pyxel.GAMEPAD1_BUTTON_START):
                 self.pause = not self.pause
             if self.pause:
                 return
@@ -251,21 +311,22 @@ class Game:
 
     def update_title(self):
 
-        # --- VPAD: Early start ---
+        # --- EARLY START (production) ---
         if pressed_or_edge(pyxel.KEY_Z, pyxel.KEY_SPACE, pyxel.KEY_RETURN, PAD_A, PAD_B, PAD_X, PAD_Y) \
            or (MOUSE_LEFT is not None and pyxel.btnp(MOUSE_LEFT)):
             self.state = PLAYING
             return
-        # --- VPAD: End early start ---
+        # --- END EARLY START ---
         self.title_blink = (self.title_blink + 1) % FPS
-        if pyxel.btnp(pyxel.KEY_Z) or pyxel.btnp(pyxel.KEY_SPACE) or pyxel.btnp(pyxel.KEY_RETURN):
+        if btn_any(pyxel.KEY_Z, pyxel.KEY_SPACE, pyxel.KEY_RETURN, *PAD["A"], *PAD["B"], *PAD["START"]) \
+           or pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
             self.state = PLAYING
-        if pyxel.btnp(pyxel.KEY_R):
+        if pressed_or_edge(pyxel.KEY_R, PAD_Y):
             self.stage = 1
             self.reset_stage()
 
     def update_result(self):
-        if pressed_or_edge(pyxel.KEY_R, pyxel.KEY_Z, pyxel.KEY_SPACE, PAD_Y):
+        if btnp_any(pyxel.KEY_R, pyxel.KEY_Z, pyxel.KEY_SPACE, pyxel.GAMEPAD1_BUTTON_A, pyxel.GAMEPAD1_BUTTON_B, pyxel.GAMEPAD1_BUTTON_START, pyxel.GAMEPAD1_BUTTON_SELECT):
             if self.state == CLEAR:
                 self.stage += 1
             self.reset_stage()
@@ -273,10 +334,10 @@ class Game:
 
     def update_playing(self):
         self.frame += 1
-        if pyxel.btnp(pyxel.KEY_R):
+        if pressed_or_edge(pyxel.KEY_R, PAD_Y):
             self.reset_stage()
             return
-        if pressed_or_edge(pyxel.KEY_Z, pyxel.KEY_SPACE, PAD_A, PAD_B):
+        if btnp_any(pyxel.KEY_Z, pyxel.KEY_SPACE, pyxel.GAMEPAD1_BUTTON_A, pyxel.GAMEPAD1_BUTTON_B):
             self._place_bomb()
 
         self._update_player_gridstep()
@@ -312,20 +373,21 @@ class Game:
     def _read_dir_priority(self):
         # まず「押された瞬間(btnp)」を優先、なければ「押されている(btn)」順で採用
         choices = [
-            ((1,0), (pyxel.KEY_RIGHT, pyxel.KEY_D, PAD_RIGHT)),
-            ((-1,0), (pyxel.KEY_LEFT,  pyxel.KEY_A, PAD_LEFT)),
-            ((0,1),  (pyxel.KEY_DOWN,  pyxel.KEY_S, PAD_DOWN)),
-            ((0,-1), (pyxel.KEY_UP,    pyxel.KEY_W, PAD_UP)),
+            ((1,0), (pyxel.KEY_RIGHT, pyxel.KEY_D, pyxel.GAMEPAD1_BUTTON_DPAD_RIGHT)),
+            ((-1,0), (pyxel.KEY_LEFT,  pyxel.KEY_A, pyxel.GAMEPAD1_BUTTON_DPAD_LEFT)),
+            ((0,1),  (pyxel.KEY_DOWN,  pyxel.KEY_S, pyxel.GAMEPAD1_BUTTON_DPAD_DOWN)),
+            ((0,-1), (pyxel.KEY_UP,    pyxel.KEY_W, pyxel.GAMEPAD1_BUTTON_DPAD_UP)),
         ]
         # btnp 優先
         for (dx,dy), keys in choices:
-            if any((k is not None and pyxel.btnp(k)) for k in keys):
+            if any(pyxel.btnp(k) for k in keys):
                 return dx, dy
         # btn のフォールバック
         for (dx,dy), keys in choices:
-            if any((k is not None and pyxel.btn(k)) for k in keys):
+            if any(pyxel.btn(k) for k in keys):
                 return dx, dy
         return 0, 0
+
     def _start_step_if_possible(self, dx, dy):
         if dx == 0 and dy == 0:
             return False
@@ -585,7 +647,7 @@ class Game:
         s = "BOMBER-PYXEL"
         self._shadow_text((W - len(s) * 4) // 2, 40, s, 7)
         self._shadow_text((W - 11 * 4) // 2, 60, f"STAGE {self.stage}", 6)
-        hint = "PRESS Z / SPACE TO START"
+        hint = "PRESS Z / SPACE or A / START"
         if (self.title_blink // 30) % 2 == 0:
             self._shadow_text((W - len(hint) * 4) // 2, 88, hint, 10)
         self._shadow_text(16, 120, "ARROWS/WASD: MOVE (grid step)", 6)
