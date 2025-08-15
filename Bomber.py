@@ -13,7 +13,8 @@ import random
 from dataclasses import dataclass
 
 import pyxel
-# --- vpad helpers (A/B/X/Y + DPAD + tap) ---
+# === VPAD HELPERS START ===
+# Virtual pad helpers for Web (A/B/X/Y + DPAD) and tap on mobile
 try:
     MOUSE_LEFT = pyxel.MOUSE_BUTTON_LEFT
 except AttributeError:
@@ -37,9 +38,10 @@ PAD_X = _gp("GAMEPAD1_BUTTON_X", 2)
 PAD_Y = _gp("GAMEPAD1_BUTTON_Y", 3)
 
 def pressed_or_edge(*codes, grace=3):
+    """True on edge or (every few frames) while held; helps iOS where btnp can be missed."""
     codes = [c for c in codes if c is not None]
     return any(pyxel.btnp(c) for c in codes) or (pyxel.frame_count % grace == 0 and any(pyxel.btn(c) for c in codes))
-# --- end helpers ---
+# === VPAD HELPERS END ===
 
 
 # --------------- Constants ---------------
@@ -249,21 +251,21 @@ class Game:
 
     def update_title(self):
 
-        # --- Early start (vpad) ---
+        # --- VPAD: Early start ---
         if pressed_or_edge(pyxel.KEY_Z, pyxel.KEY_SPACE, pyxel.KEY_RETURN, PAD_A, PAD_B, PAD_X, PAD_Y) \
            or (MOUSE_LEFT is not None and pyxel.btnp(MOUSE_LEFT)):
             self.state = PLAYING
             return
-        # --- End Early start ---
+        # --- VPAD: End early start ---
         self.title_blink = (self.title_blink + 1) % FPS
         if pyxel.btnp(pyxel.KEY_Z) or pyxel.btnp(pyxel.KEY_SPACE) or pyxel.btnp(pyxel.KEY_RETURN):
             self.state = PLAYING
-        if pressed_or_edge(pyxel.KEY_R, PAD_Y):
+        if pyxel.btnp(pyxel.KEY_R):
             self.stage = 1
             self.reset_stage()
 
     def update_result(self):
-        if pyxel.btnp(pyxel.KEY_R) or pyxel.btnp(pyxel.KEY_Z) or pyxel.btnp(pyxel.KEY_SPACE):
+        if pressed_or_edge(pyxel.KEY_R, pyxel.KEY_Z, pyxel.KEY_SPACE, PAD_Y):
             if self.state == CLEAR:
                 self.stage += 1
             self.reset_stage()
@@ -271,7 +273,7 @@ class Game:
 
     def update_playing(self):
         self.frame += 1
-        if pressed_or_edge(pyxel.KEY_R, PAD_Y):
+        if pyxel.btnp(pyxel.KEY_R):
             self.reset_stage()
             return
         if pressed_or_edge(pyxel.KEY_Z, pyxel.KEY_SPACE, PAD_A, PAD_B):
@@ -324,7 +326,6 @@ class Game:
             if any((k is not None and pyxel.btn(k)) for k in keys):
                 return dx, dy
         return 0, 0
-
     def _start_step_if_possible(self, dx, dy):
         if dx == 0 and dy == 0:
             return False
@@ -584,7 +585,7 @@ class Game:
         s = "BOMBER-PYXEL"
         self._shadow_text((W - len(s) * 4) // 2, 40, s, 7)
         self._shadow_text((W - 11 * 4) // 2, 60, f"STAGE {self.stage}", 6)
-        hint = "PRESS A/B/X/Y or Z/SPACE/ENTER or TAP"
+        hint = "PRESS Z / SPACE TO START"
         if (self.title_blink // 30) % 2 == 0:
             self._shadow_text((W - len(hint) * 4) // 2, 88, hint, 10)
         self._shadow_text(16, 120, "ARROWS/WASD: MOVE (grid step)", 6)
