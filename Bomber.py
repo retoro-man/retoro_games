@@ -13,7 +13,8 @@ import random
 from dataclasses import dataclass
 
 import pyxel
-# === Virtual Pad Helpers (A/B/X/Y + DPAD) ===
+# === Virtual Pad StartFix Helpers ===
+# Mouse left (compat across Pyxel versions)
 try:
     MOUSE_LEFT = pyxel.MOUSE_BUTTON_LEFT
 except AttributeError:
@@ -27,21 +28,40 @@ def _gp(name, idx=None):
         return getattr(pyxel, f"GAMEPAD1_BUTTON_{idx}", None)
     return None
 
+# DPAD
 PAD_RIGHT  = _gp("GAMEPAD1_BUTTON_DPAD_RIGHT")
 PAD_LEFT   = _gp("GAMEPAD1_BUTTON_DPAD_LEFT")
 PAD_DOWN   = _gp("GAMEPAD1_BUTTON_DPAD_DOWN")
 PAD_UP     = _gp("GAMEPAD1_BUTTON_DPAD_UP")
-
-# Virtual pad exposes A/B/X/Y. Keep numeric fallbacks (0..3) as safety.
+# Virtual pad: A/B/X/Y (+ numeric fallbacks 0..3)
 PAD_A = _gp("GAMEPAD1_BUTTON_A", 0)
 PAD_B = _gp("GAMEPAD1_BUTTON_B", 1)
 PAD_X = _gp("GAMEPAD1_BUTTON_X", 2)
 PAD_Y = _gp("GAMEPAD1_BUTTON_Y", 3)
 
-def pressed_or_edge(*codes, grace=3):
+def _any_btnp(*codes):
     codes = [c for c in codes if c is not None]
-    return any(pyxel.btnp(c) for c in codes) or (pyxel.frame_count % grace == 0 and any(pyxel.btn(c) for c in codes))
-# === end Virtual Pad Helpers ===
+    return any(pyxel.btnp(c) for c in codes)
+
+def _any_btn(*codes):
+    codes = [c for c in codes if c is not None]
+    return any(pyxel.btn(c) for c in codes)
+
+def pressed_or_edge(*codes, grace=3):
+    """True on edge or (every few frames) while held (iOS can miss btnp)."""
+    return _any_btnp(*codes) or (pyxel.frame_count % grace == 0 and _any_btn(*codes))
+
+def _set_playing(self):
+    # Try common state attribute names
+    for attr in ("state", "mode", "scene", "game_state"):
+        if hasattr(self, attr):
+            try:
+                setattr(self, attr, PLAYING)
+                return True
+            except Exception:
+                pass
+    return False
+# === end Virtual Pad StartFix Helpers ===
 
 
 # --------------- Constants ---------------
@@ -235,6 +255,17 @@ class Game:
 
     # --------------- Update Loop ---------------
     def update(self):
+
+        # --- GLOBAL EARLY START (virtual pad) ---
+        try:
+            is_title = (getattr(self, "state", None) == TITLE) or (getattr(self, "mode", None) == TITLE) or (getattr(self, "scene", None) == TITLE) or (getattr(self, "game_state", None) == TITLE)
+        except Exception:
+            is_title = False
+        if is_title and (pressed_or_edge(pyxel.KEY_Z, pyxel.KEY_SPACE, pyxel.KEY_RETURN, PAD_A, PAD_B, PAD_X, PAD_Y) \
+                        or (MOUSE_LEFT is not None and pyxel.btnp(MOUSE_LEFT))):
+            if _set_playing(self):
+                return
+        # --- END GLOBAL EARLY START ---
         if pyxel.btnp(pyxel.KEY_Q):
             self.state = TITLE
 
@@ -250,10 +281,15 @@ class Game:
             self.update_result()
 
     def update_title(self):
+
+        # --- EARLY START (virtual pad) ---
+        if pressed_or_edge(pyxel.KEY_Z, pyxel.KEY_SPACE, pyxel.KEY_RETURN, PAD_A, PAD_B, PAD_X, PAD_Y) \
+           or (MOUSE_LEFT is not None and pyxel.btnp(MOUSE_LEFT)):
+            if _set_playing(self):
+                return
+        # --- END EARLY START ---
         self.title_blink = (self.title_blink + 1) % FPS
-        if pressed_or_edge(pyxel.KEY_Z, pyxel.KEY_SPACE, pyxel.KEY_RETURN, PAD_A, PAD_B, PAD_X, PAD_Y) or (MOUSE_LEFT is not None and pyxel.btnp(MOUSE_LEFT)):
-            self.state = PLAYING
-            return
+        if pyxel.btnp(pyxel.KEY_Z) or pyxel.btnp(pyxel.KEY_SPACE) or pyxel.btnp(pyxel.KEY_RETURN):
             self.state = PLAYING
         if pressed_or_edge(pyxel.KEY_R, PAD_Y):
             self.stage = 1
@@ -581,7 +617,7 @@ class Game:
         s = "BOMBER-PYXEL"
         self._shadow_text((W - len(s) * 4) // 2, 40, s, 7)
         self._shadow_text((W - 11 * 4) // 2, 60, f"STAGE {self.stage}", 6)
-        hint = "PRESS A / B / X / Y or Z / SPACE to START"
+        hint = "PRESS Z / SPACE TO START"
         if (self.title_blink // 30) % 2 == 0:
             self._shadow_text((W - len(hint) * 4) // 2, 88, hint, 10)
         self._shadow_text(16, 120, "ARROWS/WASD: MOVE (grid step)", 6)
